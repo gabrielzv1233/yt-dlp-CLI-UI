@@ -20,14 +20,31 @@ def search_youtube(query):
     print("No search results found.")
     return None
 
+def format_duration(seconds):
+    """ Converts seconds into HH:MM:SS format """
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02}:{seconds:02}"
+    return f"{minutes}:{seconds:02}"
+
 def get_available_formats(url):
     with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
         info = ydl.extract_info(url, download=False)
 
+    title = info.get('title', 'Unknown Title')
+    creator = info.get('uploader', 'Unknown Creator')
+    duration = format_duration(info.get('duration', 0))
+
+    print("\nFetching available video data...\n")
+    print(f"title: {title}")
+    print(f"creator: {creator}")
+    print(f"duration: {duration}\n")
+
     unique_formats = {}
 
     for fmt in info['formats']:
-        if fmt['ext'] == 'mp4' and fmt.get('height') in [2160, 1440, 1080, 720, 144]:  # Video formats
+        if fmt['ext'] == 'mp4' and fmt.get('height') in [2160, 1440, 1080, 720, 144]:
             res_key = f"{fmt.get('height')}p"
             if res_key not in unique_formats:
                 unique_formats[res_key] = {
@@ -40,7 +57,7 @@ def get_available_formats(url):
             if 'Audio' not in unique_formats or abr > unique_formats['Audio'].get('abr', 0):
                 unique_formats['Audio'] = {'id': fmt['format_id'], 'resolution': 'Audio', 'ext': 'mp3', 'abr': abr}
 
-    return info['title'], list(unique_formats.values())
+    return title, creator, duration, list(unique_formats.values())
 
 def download_to_temp(url, format_id, is_audio):
     temp_dir = tempfile.mkdtemp()
@@ -53,14 +70,21 @@ def download_to_temp(url, format_id, is_audio):
 
     return temp_file + (".mp3" if is_audio else "")
 
-def save_file_dialog(default_filename, file_extension):
+def save_file_dialog(default_filename, file_extension, default_folder=None):
     root = tk.Tk()
     root.withdraw()
-
     root.attributes("-topmost", True)
-    root.update()
 
-    file_path = filedialog.asksaveasfilename( defaultextension=f".{file_extension}", filetypes=[(f"{file_extension.upper()} files", f"*.{file_extension}"), ("All Files", "*.*")], initialfile=default_filename, title="Save Downloaded File")
+    if default_folder is None:
+        default_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=f".{file_extension}",
+        filetypes=[(f"{file_extension.upper()} files", f"*.{file_extension}"), ("All Files", "*.*")],
+        initialfile=default_filename,
+        initialdir=default_folder,
+        title="Save Downloaded File"
+    )
 
     root.destroy()
     return file_path
@@ -98,14 +122,13 @@ def main():
             print(f"Found video: {search_result_url}")
             url = search_result_url
 
-        print("\nFetching available formats...")
-        title, formats = get_available_formats(url)
+        title, creator, duration, formats = get_available_formats(url)
 
         if not formats:
             print("No valid formats found!")
             continue
 
-        print(f"\nAvailable formats for: {title}\n")
+        print(f"Available formats for {title}:\n")
         for i, fmt in enumerate(formats):
             print(f"{i}: {fmt['resolution']} ({fmt['ext']})")
 
